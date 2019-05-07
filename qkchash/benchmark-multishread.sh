@@ -1,5 +1,27 @@
 #!/bin/bash
 
+function print_cpu {
+    cpu_count="$(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
+    cpu_cores="$(cat /proc/cpuinfo | grep "siblings" | uniq | tr -d ' ' | cut -d: -f2)"
+    cpu_type="$(cat /proc/cpuinfo | grep "model name" | uniq | tr -s ' ' | cut -d: -f2)"
+    cpu_cores_total=$(($cpu_count * $cpu_cores))
+
+    if [ "$cpu_count" -gt 0 ] ; then
+      for i in $(seq 1 $cpu_count) ; do
+        cpu_spec_type="$(echo "$cpu_type" | head -n$i | tail -n1)"
+        echo -n "   CPU$i:$cpu_spec_type"
+        cpu_spec_cores="$(echo "$cpu_cores" | head -n$i | tail -n1)"
+        if [ "$cpu_spec_cores" -gt 1 ] ; then
+          echo " (Cores $cpu_spec_cores)"
+        else
+          echo
+        fi
+      done
+    else
+      echo "   CPU: $cpu_type"
+    fi
+}
+
 if pgrep -f external_miner.py > /dev/null;
 then
         echo ERROR: external_miner.py is running. stop manually and rerun the test!
@@ -7,25 +29,7 @@ then
         exit 1
 fi
 
-cpu_count="$(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
-cpu_cores="$(cat /proc/cpuinfo | grep "siblings" | uniq | tr -d ' ' | cut -d: -f2)"
-cpu_type="$(cat /proc/cpuinfo | grep "model name" | uniq | tr -s ' ' | cut -d: -f2)"
-cpu_cores_total=$(($cpu_count * $cpu_cores))
-
-if [ "$cpu_count" -gt 0 ] ; then
-  for i in $(seq 1 $cpu_count) ; do
-    cpu_spec_type="$(echo "$cpu_type" | head -n$i | tail -n1)"
-    echo -n "   CPU$i:$cpu_spec_type"
-    cpu_spec_cores="$(echo "$cpu_cores" | head -n$i | tail -n1)"
-    if [ "$cpu_spec_cores" -gt 1 ] ; then
-      echo " (Cores $cpu_spec_cores)"
-    else
-      echo
-    fi
-  done
-else
-  echo "   CPU: $cpu_type"
-fi
+print_cpu
 
 suffix=$(cat /dev/urandom | tr -dc 'A-F0-9' | fold -w 8 | head -n 1)
 script_name="QKC_$suffix.py"
@@ -370,11 +374,12 @@ do
                 tail -n 1 test*_$suffix.log
                 sleep 10
         else
-                echo children are dead...
+                echo children are dead... OK
                 echo found $(grep "Native version, time used" *_$suffix.log | wc -l) finish lines
                 grep "Native version, time used:" *_$suffix.log \
                 | sed 's/.*hashes per sec: //g' \
                 | awk '{sum+=sprintf("%f",$1)}END{printf "threads:\t\t%d\ntotal hashrate:\t\t%.2f\nsingle thread hashrate:\t%.2f\n",NR,sum,sum/NR}'
+                print_cpu
                 echo "remove bodies:" && rm $script_name *_$suffix.log && echo success... || echo oops...
 
                 exit
